@@ -107,6 +107,29 @@
   .goal-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:17px;display:flex;flex-direction:column;gap:10px}
   .goal-header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
   .goal-name{font-weight:600;font-size:.9rem}
+  .goal-card-clickable{cursor:pointer;user-select:none;}
+  .goal-card-clickable:hover .goal-name{color:var(--accent2);}
+
+  /* Goal history drop-down */
+  .goal-detail-panel{display:none;padding:14px 0 2px;}
+  .goal-detail-panel.open{display:block;}
+
+  /* Calendar grid: 10 weeks × 7 days */
+  .goal-cal-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .goal-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;min-width:200px;margin-bottom:14px;}
+  .goal-cal-dh{font-size:.58rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);text-align:center;padding-bottom:2px;}
+  .goal-cal-day{aspect-ratio:1;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:600;color:var(--text3);background:var(--surface2);border:1px solid transparent;position:relative;}
+  .goal-cal-day.future{opacity:.25;}
+  .goal-cal-day.hit{background:var(--accent);color:#061a0c;border-color:var(--accent);}
+  .goal-cal-day.week-ok{background:rgba(74,222,128,.14);color:var(--accent);border:1px solid rgba(74,222,128,.28);}
+  .goal-cal-day.is-today{box-shadow:0 0 0 2px var(--accent2);}
+
+  /* Archive section */
+  .archive-toggle-row{display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 0 6px;user-select:none;color:var(--text3);font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.09em;border-top:1px solid var(--border);margin-top:24px;}
+  .archive-toggle-row:hover{color:var(--text2);}
+  .archive-grid{display:none;}
+  .archive-grid.open{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px;}
+  @media(max-width:860px){.archive-grid.open{grid-template-columns:1fr;}}
 
   .plan-day{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:7px}
   .plan-day-header{padding:10px 13px;background:var(--surface2);display:flex;align-items:center;justify-content:space-between;cursor:pointer}
@@ -434,6 +457,15 @@
       <button class="btn btn-primary" onclick="openModal('modal-add-goal')">+ Add Goal</button>
     </div>
     <div class="grid2" id="goals-grid"></div>
+    <!-- Archive -->
+    <div id="goals-archive-wrap" style="display:none;">
+      <div class="archive-toggle-row" onclick="toggleGoalArchive()">
+        <span id="archive-caret">▶</span>
+        <span>Archived Goals</span>
+        <span id="archive-badge" style="background:var(--surface2);border:1px solid var(--border);border-radius:99px;padding:1px 8px;font-size:.68rem;font-weight:700;color:var(--text2);text-transform:none;letter-spacing:0;"></span>
+      </div>
+      <div class="archive-grid" id="archive-grid"></div>
+    </div>
   </div>
 
   <!-- PLANS -->
@@ -490,17 +522,43 @@
   <!-- DATA -->
   <div class="page-view" id="page-data">
     <div class="page-header"><div class="page-title">Data & Backup</div><div class="page-sub">Your data syncs automatically to Google Drive.</div></div>
-    <!-- Drive sync status card -->
+
+    <!-- Account card -->
+    <div class="card mb-18" style="border-color:rgba(96,165,250,.25);">
+      <div class="card-title">Account</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+        <div>
+          <div style="font-size:.85rem;color:var(--text);">Signed in as <span id="account-email" style="color:var(--accent2);font-weight:600;"></span></div>
+          <div style="font-size:.75rem;color:var(--text3);margin-top:3px;">Data syncs live to your Google Drive.</div>
+        </div>
+        <button class="btn btn-danger" onclick="signOut()" style="flex-shrink:0;">⎋ Log Out</button>
+      </div>
+    </div>
+
+    <!-- Drive sync card -->
     <div class="card mb-18">
       <div class="card-title">☁️ Google Drive Sync</div>
-      <div id="drive-sync-info" style="font-size:.845rem;color:var(--text2);margin-bottom:14px;">Connected and syncing automatically.</div>
+      <!-- Auto-backup frequency -->
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;">
+        <div style="font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.09em;color:var(--text3);margin-bottom:8px;">Auto-Backup Frequency</div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <select class="form-select" id="backup-freq-select" onchange="saveBackupFreq()" style="max-width:240px;flex:1;">
+            <option value="0">Don't auto-backup</option>
+            <option value="1" selected>Once daily (at 8 pm)</option>
+            <option value="2">Every 2 days</option>
+            <option value="3">Every 3 days</option>
+            <option value="7">Once a week</option>
+          </select>
+          <span id="backup-next-label" style="font-size:.74rem;color:var(--text3);"></span>
+        </div>
+      </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn btn-secondary" onclick="syncNow()">↻ Sync Now</button>
         <button class="btn btn-secondary" onclick="createManualBackup()">📁 Backup to Drive Now</button>
-        <button class="btn btn-danger btn-sm" onclick="signOut()" style="margin-left:auto;">Sign Out</button>
       </div>
       <div id="drive-sync-status" style="display:none;margin-top:9px;" class="import-status"></div>
     </div>
+
     <div class="grid2">
       <div class="card">
         <div class="card-title">Export Data</div>
@@ -655,10 +713,13 @@
       <input class="form-input" id="edit-goal-keyword" placeholder='e.g. "Achilles" to separate from "Biceps PT"' />
     </div>
     <div class="form-group"><label class="form-label">Notes (optional)</label><input class="form-input" id="edit-goal-notes" placeholder="e.g. At least 30 min each" /></div>
-    <div class="modal-footer">
+    <div class="modal-footer" style="justify-content:space-between;">
       <button class="btn btn-danger btn-sm" onclick="deleteGoalFromEdit()">Delete</button>
-      <button class="btn btn-secondary" onclick="closeModal('modal-edit-goal')">Cancel</button>
-      <button class="btn btn-primary" onclick="updateGoal()">Save</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-secondary btn-sm" onclick="archiveGoalFromEdit()">📦 Archive</button>
+        <button class="btn btn-secondary" onclick="closeModal('modal-edit-goal')">Cancel</button>
+        <button class="btn btn-primary" onclick="updateGoal()">Save</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1288,23 +1349,62 @@ async function createBackupFile(label){
   localStorage.setItem('summit_last_backup',lastBackupDate);
 }
 
-// Auto backup: check at 8pm and once per day
+// Auto backup: check at 8pm, respecting user-set frequency
 function scheduleBackupCheck(){
   checkAutoBackup();
-  setInterval(checkAutoBackup,60*60*1000); // check every hour
+  setInterval(checkAutoBackup,60*60*1000); // hourly
 }
+
+function getBackupFreqDays(){
+  return parseInt(localStorage.getItem('summit_backup_freq')||'1');
+}
+
+function saveBackupFreq(){
+  const sel=document.getElementById('backup-freq-select');
+  if(!sel)return;
+  const val=sel.value;
+  localStorage.setItem('summit_backup_freq',val);
+  updateBackupNextLabel();
+}
+
+function updateBackupNextLabel(){
+  const lbl=document.getElementById('backup-next-label');
+  if(!lbl)return;
+  const freq=getBackupFreqDays();
+  if(freq===0){lbl.textContent='Automatic backups disabled.';return;}
+  const last=localStorage.getItem('summit_last_backup')||'';
+  if(!last){lbl.textContent='No backups yet.';return;}
+  const lastDate=new Date(last+'T00:00:00');
+  const next=new Date(lastDate);next.setDate(next.getDate()+freq);
+  const now=new Date();now.setHours(0,0,0,0);
+  const diff=Math.ceil((next-now)/(86400000));
+  if(diff<=0) lbl.textContent='Next backup: tonight at 8 pm.';
+  else if(diff===1) lbl.textContent='Next backup: tomorrow at 8 pm.';
+  else lbl.textContent=`Next backup: in ${diff} days.`;
+}
+
 async function checkAutoBackup(){
-  if(!driveAccessToken) return;
+  if(!driveAccessToken)return;
+  const freq=getBackupFreqDays();
+  if(freq===0)return; // disabled
   const now=new Date();
   const hour=now.getHours();
+  if(hour<20)return; // only after 8pm
   const todayStr=today();
-  const lastBackup=localStorage.getItem('summit_last_backup')||'';
-  // Trigger if: it's 8pm or later, and haven't backed up today
-  if(hour>=20 && lastBackup!==todayStr){
+  const last=localStorage.getItem('summit_last_backup')||'';
+  // Check if enough days have passed since last backup
+  let daysSinceLast=999;
+  if(last){
+    const lastDate=new Date(last+'T00:00:00');
+    const nowDate=new Date(todayStr+'T00:00:00');
+    daysSinceLast=Math.round((nowDate-lastDate)/86400000);
+  }
+  if(daysSinceLast>=freq){
     try{
       await createBackupFile(todayStr);
-      setDriveStatus('saved',`☁️ Auto-backup saved (${todayStr})`);
+      setDriveStatus('saved',`☁️ Auto-backup saved`);
       setTimeout(()=>setDriveStatus('saved','☁️ Synced'),4000);
+      updateBackupNextLabel();
     }catch(e){console.warn('Auto-backup failed:',e);}
   }
 }
@@ -1696,7 +1796,7 @@ function saveGoal(){
   const name=document.getElementById('goal-name').value.trim(),count=parseInt(document.getElementById('goal-count').value);
   if(!name||!count){alert('Please fill in name and sessions count.');return;}
   const keyword=document.getElementById('goal-keyword').value.trim();
-  state.goals.push({id:uid(),name,type:document.getElementById('goal-type').value,count,keyword:keyword||'',notes:document.getElementById('goal-notes').value.trim()});
+  state.goals.push({id:uid(),name,type:document.getElementById('goal-type').value,count,keyword:keyword||'',notes:document.getElementById('goal-notes').value.trim(),archived:false});
   saveState();closeModal('modal-add-goal');
   ['goal-name','goal-count','goal-notes','goal-keyword'].forEach(x=>document.getElementById(x).value='');
   renderGoals();renderDashboard();
@@ -1708,7 +1808,6 @@ function openEditGoal(id){
   document.getElementById('edit-goal-count').value=g.count;
   document.getElementById('edit-goal-keyword').value=g.keyword||'';
   document.getElementById('edit-goal-notes').value=g.notes||'';
-  // Populate type select then set value
   const types=state.activityTypes||DEFAULT_ACTIVITY_TYPES;
   const sel=document.getElementById('edit-goal-type');
   sel.innerHTML=`<option value="Any"${g.type==='Any'?' selected':''}>Any type</option>`+
@@ -1730,41 +1829,227 @@ function deleteGoalFromEdit(){
   state.goals=state.goals.filter(g=>g.id!==id);
   saveState();closeModal('modal-edit-goal');renderGoals();renderDashboard();
 }
-function getGoalProg(g){
-  const w=state.activities.filter(a=>isThisWeek(a.date)&&a.completed);
-  return Math.min(w.filter(a=>{
+function archiveGoalFromEdit(){
+  const id=document.getElementById('edit-goal-id').value;
+  const g=state.goals.find(x=>x.id===id);if(!g)return;
+  if(!confirm(`Archive "${g.name}"? It will move to the Archived section and stop counting toward this week.`))return;
+  g.archived=true;
+  saveState();closeModal('modal-edit-goal');renderGoals();renderDashboard();
+}
+function unarchiveGoal(id){
+  const g=state.goals.find(x=>x.id===id);if(!g)return;
+  g.archived=false;
+  saveState();renderGoals();renderDashboard();
+}
+function toggleGoalArchive(){
+  const grid=document.getElementById('archive-grid');
+  const caret=document.getElementById('archive-caret');
+  const open=grid.classList.toggle('open');
+  if(caret) caret.textContent=open?'▾':'▶';
+}
+
+function getGoalProg(g,wsDate,weDate){
+  // If no bounds given, use current week
+  if(!wsDate){const b=getWeekBounds(0);wsDate=b.ws;weDate=b.we;}
+  return Math.min(state.activities.filter(a=>{
+    if(!a.completed)return false;
+    const d=new Date(a.date+'T00:00:00');
+    if(d<wsDate||d>=weDate)return false;
     if(g.type!=='Any'&&a.type!==g.type)return false;
     if(g.keyword&&!a.name.toLowerCase().includes(g.keyword.toLowerCase()))return false;
     return true;
-  }).length,g.count);
+  }).length, g.count);
 }
+
+// Count matching completed activities on a single date string
+function goalActsOnDate(g,ds){
+  return state.activities.filter(a=>{
+    if(!a.completed||a.date!==ds)return false;
+    if(g.type!=='Any'&&a.type!==g.type)return false;
+    if(g.keyword&&!a.name.toLowerCase().includes(g.keyword.toLowerCase()))return false;
+    return true;
+  }).length;
+}
+
 function renderGoals(){
+  const active=state.goals.filter(g=>!g.archived);
+  const archived=state.goals.filter(g=>g.archived);
   const grid=document.getElementById('goals-grid');
-  if(!state.goals.length){grid.innerHTML=`<div class="empty-state col-span2" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:48px"><div class="icon">🎯</div><p>No goals yet. Add your first one!</p></div>`;return;}
-  grid.innerHTML=state.goals.map(g=>{
-    const done=getGoalProg(g),pct=Math.round(done/g.count*100);
-    const col=pct>=100?'var(--accent)':pct>=50?'var(--accent3)':'var(--accent2)';
-    return`<div class="goal-card">
-      <div class="goal-header">
-        <div>
-          <div class="goal-name">${g.name}</div>
-          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">
-            ${g.type!=='Any'?`<span class="chip chip-blue">${g.type}</span>`:''}
-            ${g.keyword?`<span class="chip chip-amber" title="Only counts activities with this word in the name">🔍 "${g.keyword}"</span>`:''}
-          </div>
-          ${g.notes?`<div class="text-sm" style="color:var(--text2);margin-top:4px;">${g.notes}</div>`:''}
+
+  if(!active.length){
+    grid.innerHTML=`<div class="empty-state col-span2" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:48px"><div class="icon">🎯</div><p>No goals yet. Add your first one!</p></div>`;
+  } else {
+    grid.innerHTML=active.map(g=>goalCardHtml(g,false)).join('');
+  }
+
+  // Archive section
+  const wrap=document.getElementById('goals-archive-wrap');
+  const archGrid=document.getElementById('archive-grid');
+  const badge=document.getElementById('archive-badge');
+  if(archived.length){
+    wrap.style.display='block';
+    badge.textContent=archived.length;
+    archGrid.innerHTML=archived.map(g=>goalCardHtml(g,true)).join('');
+  } else {
+    wrap.style.display='none';
+  }
+}
+
+function goalCardHtml(g,isArchived){
+  const done=getGoalProg(g);
+  const pct=Math.round(done/g.count*100);
+  const col=pct>=100?'var(--accent)':pct>=50?'var(--accent3)':'var(--accent2)';
+  return`<div class="goal-card" id="gcard-${g.id}" style="opacity:${isArchived?.7:1};">
+    <div class="goal-header">
+      <div style="flex:1;min-width:0;cursor:pointer;" onclick="toggleGoalDetail('${g.id}')" title="Click to see history">
+        <div class="goal-name">${g.name} <span style="font-size:.68rem;color:var(--text3);font-weight:400;" id="gcaret-${g.id}">▸ history</span></div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">
+          ${g.type!=='Any'?`<span class="chip chip-blue">${g.type}</span>`:''}
+          ${g.keyword?`<span class="chip chip-amber">🔍 "${g.keyword}"</span>`:''}
+          ${isArchived?`<span class="chip" style="background:rgba(255,255,255,.05);color:var(--text3);border:1px solid var(--border);">archived</span>`:''}
         </div>
-        <button class="btn btn-secondary btn-sm btn-icon" onclick="openEditGoal('${g.id}')" title="Edit goal">✏️</button>
+        ${g.notes?`<div class="text-sm" style="color:var(--text2);margin-top:4px;">${g.notes}</div>`:''}
       </div>
-      <div>
-        <div class="flex-between" style="margin-bottom:5px;">
-          <div style="font-size:.79rem;color:var(--text2);"><span style="color:${col};font-weight:700;font-size:1rem;">${done}</span> / ${g.count} sessions this week</div>
-          <div style="font-size:.79rem;color:${col};font-weight:600;">${pct>=100?'🎉 Done!':pct+'%'}</div>
-        </div>
-        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${col};"></div></div>
+      <div style="display:flex;gap:5px;flex-shrink:0;">
+        ${isArchived?`<button class="btn btn-secondary btn-sm btn-icon" title="Restore" onclick="unarchiveGoal('${g.id}')">↩</button>`:''}
+        <button class="btn btn-secondary btn-sm btn-icon" onclick="openEditGoal('${g.id}')" title="Edit">✏️</button>
       </div>
-    </div>`;
-  }).join('');
+    </div>
+    ${!isArchived?`<div>
+      <div class="flex-between" style="margin-bottom:5px;">
+        <div style="font-size:.79rem;color:var(--text2);"><span style="color:${col};font-weight:700;font-size:1rem;">${done}</span> / ${g.count} sessions this week</div>
+        <div style="font-size:.79rem;color:${col};font-weight:600;">${pct>=100?'🎉 Done!':pct+'%'}</div>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${col};"></div></div>
+    </div>`:''}
+    <div class="goal-detail-panel" id="gdp-${g.id}"></div>
+  </div>`;
+}
+
+function toggleGoalDetail(gId){
+  const panel=document.getElementById('gdp-'+gId);
+  const caret=document.getElementById('gcaret-'+gId);
+  if(!panel)return;
+  const open=panel.classList.toggle('open');
+  if(caret) caret.textContent=open?'▾ history':'▸ history';
+  if(open) buildGoalDetail(gId);
+}
+
+function buildGoalDetail(gId){
+  const g=state.goals.find(x=>x.id===gId);
+  const panel=document.getElementById('gdp-'+gId);
+  if(!g||!panel)return;
+
+  const todayD=new Date(); todayD.setHours(0,0,0,0);
+  const todayS=localDateStr(todayD);
+  const WEEKS=10;
+
+  // Find the Monday of the current week
+  function getMon(d){
+    const m=new Date(d);
+    const dow=m.getDay()===0?6:m.getDay()-1; // Mon=0
+    m.setDate(m.getDate()-dow);
+    m.setHours(0,0,0,0);
+    return m;
+  }
+  const curMon=getMon(todayD);
+
+  // Build per-date counts and per-week totals for the last WEEKS weeks
+  // Day 0 = Monday 10 weeks ago
+  const startMon=new Date(curMon);
+  startMon.setDate(startMon.getDate()-(WEEKS-1)*7);
+
+  // date string → hit count
+  const dateCounts={};
+  // weekMonStr → total hits (capped at g.count for "success" calc)
+  const weekHits={};
+  const weekMons=[];
+  for(let w=0;w<WEEKS;w++){
+    const mon=new Date(startMon); mon.setDate(mon.getDate()+w*7);
+    const monS=localDateStr(mon);
+    weekMons.push(monS);
+    weekHits[monS]=0;
+    for(let d=0;d<7;d++){
+      const day=new Date(mon); day.setDate(mon.getDate()+d);
+      const ds=localDateStr(day);
+      const cnt=goalActsOnDate(g,ds);
+      if(cnt>0) dateCounts[ds]=cnt;
+      weekHits[monS]+=cnt;
+    }
+  }
+
+  // --- Calendar ---
+  const dayLabels=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  let calHtml=dayLabels.map(dl=>`<div class="goal-cal-dh">${dl}</div>`).join('');
+  for(let w=0;w<WEEKS;w++){
+    const mon=new Date(startMon); mon.setDate(mon.getDate()+w*7);
+    const monS=localDateStr(mon);
+    const wkTotal=weekHits[monS]||0;
+    const wkSuccess=wkTotal>=g.count;
+    for(let d=0;d<7;d++){
+      const day=new Date(mon); day.setDate(mon.getDate()+d);
+      const ds=localDateStr(day);
+      const isFuture=day>todayD;
+      const isToday=ds===todayS;
+      const cnt=dateCounts[ds]||0;
+      let cls='goal-cal-day';
+      if(isFuture) cls+=' future';
+      else if(cnt>0) cls+=' hit';
+      else if(wkSuccess) cls+=' week-ok';
+      if(isToday) cls+=' is-today';
+      const tip=cnt>0?`${cnt} session${cnt>1?'s':''} · ${ds}`:ds;
+      calHtml+=`<div class="${cls}" title="${tip}">${day.getDate()}</div>`;
+    }
+  }
+
+  // --- Chart: weekly completion % for last 10 weeks ---
+  const chartLabels=weekMons.map(ms=>{
+    const d=new Date(ms+'T00:00:00');
+    return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  });
+  const chartData=weekMons.map(ms=>{
+    const hits=Math.min(weekHits[ms]||0,g.count);
+    return Math.round(hits/g.count*100);
+  });
+  const barColors=chartData.map(v=>v>=100?'rgba(74,222,128,.45)':v>=50?'rgba(245,158,11,.45)':'rgba(96,165,250,.35)');
+  const borderColors=chartData.map(v=>v>=100?'#4ade80':v>=50?'#f59e0b':'#60a5fa');
+
+  const canvasId=`gchart-${gId}`;
+  panel.innerHTML=`
+    <div style="font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.09em;color:var(--text3);margin-bottom:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      Last ${WEEKS} weeks
+      <span style="font-weight:400;text-transform:none;letter-spacing:0;display:flex;align-items:center;gap:10px;">
+        <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:var(--accent);border-radius:2px;display:inline-block;"></span>Session logged</span>
+        <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:rgba(74,222,128,.18);border:1px solid rgba(74,222,128,.3);border-radius:2px;display:inline-block;"></span>Week goal met</span>
+      </span>
+    </div>
+    <div class="goal-cal-wrap"><div class="goal-cal-grid">${calHtml}</div></div>
+    <div style="font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.09em;color:var(--text3);margin:10px 0 6px;">Weekly Completion %</div>
+    <div style="position:relative;height:110px;overflow:hidden;"><canvas id="${canvasId}"></canvas></div>`;
+
+  requestAnimationFrame(()=>{
+    const canvas=document.getElementById(canvasId);
+    if(!canvas)return;
+    if(summitCharts[canvasId]){summitCharts[canvasId].destroy();delete summitCharts[canvasId];}
+    canvas.removeAttribute('width');canvas.removeAttribute('height');
+    canvas.style.width='';canvas.style.height='';
+    summitCharts[canvasId]=new Chart(canvas,{
+      type:'bar',
+      data:{labels:chartLabels,datasets:[{
+        data:chartData,backgroundColor:barColors,borderColor:borderColors,
+        borderWidth:1.5,borderRadius:3
+      }]},
+      options:{
+        responsive:true,maintainAspectRatio:false,animation:false,
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.raw}% of weekly goal`}}},
+        scales:{
+          x:{ticks:{color:'#8892a4',font:{size:9},maxRotation:0},grid:{display:false}},
+          y:{min:0,max:100,ticks:{color:'#8892a4',font:{size:9},callback:v=>v+'%'},
+            grid:{color:'rgba(255,255,255,.04)'},border:{display:false}}
+        }
+      }
+    });
+  });
 }
 
 // ===================== WORKOUTS =====================
@@ -2673,6 +2958,16 @@ function renderDashboard(){
 // ===================== DATA =====================
 function renderDataPage(){
   document.getElementById('export-summary').innerHTML=`${state.activities.length} activities &nbsp;·&nbsp; ${state.goals.length} goals &nbsp;·&nbsp; ${state.plans.length} plans`;
+  // Account email
+  const emailEl=document.getElementById('account-email');
+  if(emailEl) emailEl.textContent=localStorage.getItem('summit_user_email')||'';
+  // Backup frequency selector
+  const sel=document.getElementById('backup-freq-select');
+  if(sel){
+    const saved=localStorage.getItem('summit_backup_freq')||'1';
+    sel.value=saved;
+  }
+  updateBackupNextLabel();
 }
 function buildExportJson(){
   return JSON.stringify({version:5,exportedAt:new Date().toISOString(),activities:state.activities,goals:state.goals,plans:state.plans,activePlanIds:state.activePlanIds,activityTypes:state.activityTypes,workouts:state.workouts},null,2);
