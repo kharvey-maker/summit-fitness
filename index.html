@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Summit — Fitness Tracker</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -170,29 +170,68 @@
   .nav-overlay.open{display:block;}
 
   @media(max-width:860px){
-    .mobile-header{display:flex;}
+    /* --- Mobile header always fixed, full width, on top of everything --- */
+    .mobile-header{display:flex !important;position:fixed;top:0;left:0;right:0;width:100%;height:54px;z-index:60;box-sizing:border-box;}
+
+    /* --- Sidebar slides in over content, does NOT affect layout --- */
     .sidebar .logo{display:none;}
-    .sidebar{padding-top:54px;transform:translateX(-100%);z-index:50;transition:transform .25s cubic-bezier(.4,0,.2,1);}
+    .sidebar{
+      position:fixed;top:0;left:0;bottom:0;
+      width:228px;
+      padding-top:54px;
+      transform:translateX(-100%);
+      z-index:50;
+      transition:transform .25s cubic-bezier(.4,0,.2,1);
+      /* No effect on main content layout */
+    }
     .sidebar.mobile-open{transform:translateX(0);}
-    /* Push content down so it's not behind mobile header */
-    .main{margin-left:0;padding:70px 14px 24px;max-width:100%;}
-    /* Stack all 2/3 column grids to 1 column */
-    .grid2,.grid3{grid-template-columns:1fr;}
-    .col-span2{grid-column:span 1;}
-    .form-row{grid-template-columns:1fr;}
-    /* Weekly totals: 2-col on mobile instead of 5 */
-    #weekly-totals-grid{grid-template-columns:1fr 1fr!important;}
-    /* Charts: always single column on mobile */
-    .charts-grid{grid-template-columns:1fr!important;}
-    .charts-grid .chart-full{grid-column:span 1!important;}
-    /* Tighten page header */
-    .page-title{font-size:1.3rem;}
-    .page-header{margin-bottom:18px;}
-    .card{padding:14px;}
-    /* Plan detail header buttons wrap nicely */
+
+    /* --- Main content: full viewport width, no left margin, clears mobile header --- */
+    .main{
+      margin-left:0 !important;
+      width:100% !important;
+      max-width:100% !important;
+      padding:66px 12px 56px 12px !important;
+      box-sizing:border-box;
+    }
+
+    /* --- App container: no flex row behavior on mobile --- */
+    .app{display:block !important;}
+
+    /* --- Stack all grids to single column --- */
+    .grid2,.grid3{grid-template-columns:1fr !important;}
+    .col-span2{grid-column:span 1 !important;}
+    .form-row{grid-template-columns:1fr !important;}
+
+    /* --- Weekly totals 2-col --- */
+    #weekly-totals-grid{grid-template-columns:1fr 1fr !important;}
+
+    /* --- Charts single column --- */
+    .charts-grid{grid-template-columns:1fr !important;}
+    .charts-grid .chart-full{grid-column:span 1 !important;}
+
+    /* --- Today's Activities header: prevent overflow --- */
+    #today-activities-card .card-title{font-size:.85rem;}
+    #today-activities-date{width:120px !important;font-size:.72rem !important;}
+
+    /* --- Typography --- */
+    .page-title{font-size:1.25rem;}
+    .page-header{margin-bottom:16px;}
+    .card{padding:12px;}
+
+    /* --- Plan detail buttons wrap --- */
     .plan-detail-actions{flex-wrap:wrap;}
-    /* Narrower modals */
-    .modal{width:calc(100vw - 24px);max-width:calc(100vw - 24px);padding:18px;}
+
+    /* --- Modals full width --- */
+    .modal{
+      width:calc(100vw - 20px) !important;
+      max-width:calc(100vw - 20px) !important;
+      padding:16px !important;
+      margin:0 !important;
+    }
+
+    /* --- Drive status bar clears content --- */
+    #drive-status-bar{font-size:.62rem;padding:0 10px;}
   }
   /* ===================== LOGIN SCREEN ===================== */
   #login-screen{position:fixed;inset:0;z-index:200;background:var(--bg);display:none;align-items:center;justify-content:center;flex-direction:column;gap:0;}
@@ -305,14 +344,14 @@
     </div>
     <!-- Today's Activities -->
     <div class="card mb-18" id="today-activities-card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div class="card-title" style="margin:0;">📅 Today's Activities</div>
-          <button id="today-return-btn" onclick="returnToToday()" class="btn btn-secondary btn-sm" style="display:none;font-size:.7rem;padding:3px 9px;">↩ Today</button>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+          <div class="card-title" style="margin:0;white-space:nowrap;">📅 Today's Activities</div>
+          <button id="today-return-btn" onclick="returnToToday()" class="btn btn-secondary btn-sm" style="display:none;font-size:.7rem;padding:3px 9px;white-space:nowrap;">↩ Today</button>
         </div>
-        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+        <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
           <button class="btn btn-secondary btn-sm btn-icon" onclick="todayNav(-1)" title="Previous day">‹</button>
-          <span id="today-activities-date" style="font-size:.77rem;color:var(--text3);width:160px;text-align:center;display:inline-block;"></span>
+          <span id="today-activities-date" style="font-size:.73rem;color:var(--text3);width:140px;text-align:center;display:inline-block;"></span>
           <button class="btn btn-secondary btn-sm btn-icon" id="today-nav-next-btn" onclick="todayNav(1)" title="Next day">›</button>
         </div>
       </div>
@@ -2634,6 +2673,9 @@ function renderDashboard(){
 // ===================== DATA =====================
 function renderDataPage(){
   document.getElementById('export-summary').innerHTML=`${state.activities.length} activities &nbsp;·&nbsp; ${state.goals.length} goals &nbsp;·&nbsp; ${state.plans.length} plans`;
+}
+function buildExportJson(){
+  return JSON.stringify({version:5,exportedAt:new Date().toISOString(),activities:state.activities,goals:state.goals,plans:state.plans,activePlanIds:state.activePlanIds,activityTypes:state.activityTypes,workouts:state.workouts},null,2);
 }
 function exportData(){
   const blob=new Blob([JSON.stringify({version:5,exportedAt:new Date().toISOString(),activities:state.activities,goals:state.goals,plans:state.plans,activePlanIds:state.activePlanIds},null,2)],{type:'application/json'});
