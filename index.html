@@ -299,6 +299,11 @@
       Continue with Google
     </button>
     <div style="font-size:.72rem;color:var(--text3);margin-top:10px;">You'll be redirected to Google to sign in, then returned here.</div>
+    <div style="font-size:.68rem;color:var(--text3);margin-top:14px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;word-break:break-all;text-align:left;">
+      <span style="font-weight:600;color:var(--text2);">Redirect URI this app uses:</span><br>
+      <span id="login-redirect-display" style="font-family:var(--mono);color:var(--accent2);font-size:.67rem;"></span>
+      <br><span style="color:var(--text3);margin-top:3px;display:block;">This must be registered exactly in Google Cloud Console → OAuth Client → Authorized redirect URIs.</span>
+    </div>
     <div class="login-status" id="login-status"></div>
   </div>
 </div>
@@ -1188,24 +1193,42 @@ let driveFileId=null;
 let backupFolderId=null;
 let lastBackupDate=null;
 
-// ---- OAuth2 implicit grant (redirect) flow ----
-// No popup, no GIS library — just a plain redirect to Google and back.
-function signIn(){
-  // Save current page state so we can restore after redirect
+// ---- OAuth2 PKCE flow (modern, works on all browsers, Google-recommended for SPAs) ----
+
+function base64urlEncode(buffer){
+  return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+async function generatePKCE(){
+  const verifier=base64urlEncode(crypto.getRandomValues(new Uint8Array(32)));
+  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(verifier));
+  const challenge=base64urlEncode(digest);
+  return{verifier,challenge};
+}
+
+async function signIn(){
   const redirectUri=location.origin+location.pathname;
+  const{verifier,challenge}=await generatePKCE();
+  // Store verifier so we can use it when Google redirects back
+  sessionStorage.setItem('pkce_verifier',verifier);
+  sessionStorage.setItem('oauth_redirect_uri',redirectUri);
+  const state=base64urlEncode(crypto.getRandomValues(new Uint8Array(16)));
+  sessionStorage.setItem('oauth_state',state);
   const params=new URLSearchParams({
     client_id:GAPI_CLIENT_ID,
     redirect_uri:redirectUri,
-    response_type:'token',
+    response_type:'code',
     scope:DRIVE_SCOPE,
-    include_granted_scopes:'true',
+    code_challenge:challenge,
+    code_challenge_method:'S256',
+    state,
+    access_type:'online',
     prompt:'select_account'
   });
   location.href='https://accounts.google.com/o/oauth2/v2/auth?'+params.toString();
 }
 
 function signOut(){
-  // Revoke token via fetch (fire-and-forget) then clear everything
   if(driveAccessToken){
     fetch('https://oauth2.googleapis.com/revoke?token='+driveAccessToken,{method:'POST'}).catch(()=>{});
   }
@@ -1213,27 +1236,49 @@ function signOut(){
   localStorage.removeItem('summit_access_token');
   localStorage.removeItem('summit_token_expiry');
   localStorage.removeItem('summit_user_email');
-  // Clear any OAuth fragment from URL so a refresh doesn't re-auth with stale token
+  sessionStorage.removeItem('pkce_verifier');
+  sessionStorage.removeItem('oauth_state');
+  sessionStorage.removeItem('oauth_redirect_uri');
   history.replaceState(null,'',location.pathname);
   document.getElementById('loading-screen').style.display='none';
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('drive-status-bar').style.display='none';
   document.getElementById('login-status').textContent='';
+  const el=document.getElementById('login-redirect-display');
+  if(el) el.textContent=location.origin+location.pathname;
 }
 
-// Parse access token from URL hash after Google redirects back
+// Exchange authorization code for access token using PKCE
+async function exchangeCodeForToken(code,redirectUri,verifier){
+  const resp=await fetch('https://oauth2.googleapis.com/token',{
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:new URLSearchParams({
+      client_id:GAPI_CLIENT_ID,
+      redirect_uri:redirectUri,
+      grant_type:'authorization_code',
+      code,
+      code_verifier:verifier
+    })
+  });
+  if(!resp.ok){
+    const err=await resp.text();
+    throw new Error('Token exchange failed: '+err);
+  }
+  return resp.json();
+}
+
+// Parse authorization code from URL query params (PKCE uses ?code=... not #token=...)
 function parseOAuthCallback(){
-  const hash=location.hash.substring(1);
-  if(!hash) return null;
-  const params=new URLSearchParams(hash);
-  const token=params.get('access_token');
-  const expiresIn=parseInt(params.get('expires_in')||'0');
+  const params=new URLSearchParams(location.search);
+  const code=params.get('code');
+  const state=params.get('state');
   const error=params.get('error');
   if(error) return{error};
-  if(token&&expiresIn){
-    // Clean the hash from the URL immediately
+  if(code){
+    // Clean the code from the URL immediately
     history.replaceState(null,'',location.pathname);
-    return{token,expiry:Date.now()+(expiresIn*1000)};
+    return{code,state};
   }
   return null;
 }
@@ -1524,20 +1569,47 @@ async function saveState(){
 async function init(){
   setWeekLabel();
 
-  // 1. Check if Google just redirected back with a token in the URL hash
+  // 1. Check if Google just redirected back with an authorization code
   const oauthResult=parseOAuthCallback();
   if(oauthResult){
     if(oauthResult.error){
       document.getElementById('loading-screen').style.display='none';
       document.getElementById('login-screen').style.display='flex';
+      const el=document.getElementById('login-redirect-display');
+      if(el) el.textContent=location.origin+location.pathname;
       document.getElementById('login-status').textContent='Sign-in failed: '+oauthResult.error+'. Please try again.';
       return;
     }
-    // Fresh token from redirect
-    driveAccessToken=oauthResult.token;
-    localStorage.setItem('summit_access_token',oauthResult.token);
-    localStorage.setItem('summit_token_expiry',oauthResult.expiry);
-    await onSignedIn();
+    // Validate state to prevent CSRF
+    const savedState=sessionStorage.getItem('oauth_state');
+    if(savedState&&oauthResult.state!==savedState){
+      document.getElementById('loading-screen').style.display='none';
+      document.getElementById('login-screen').style.display='flex';
+      document.getElementById('login-status').textContent='Security error: state mismatch. Please try again.';
+      return;
+    }
+    // Exchange code for token using PKCE verifier
+    const verifier=sessionStorage.getItem('pkce_verifier');
+    const redirectUri=sessionStorage.getItem('oauth_redirect_uri')||location.origin+location.pathname;
+    sessionStorage.removeItem('pkce_verifier');
+    sessionStorage.removeItem('oauth_state');
+    sessionStorage.removeItem('oauth_redirect_uri');
+    try{
+      document.getElementById('loading-screen').style.display='flex';
+      document.getElementById('loading-screen').querySelector('div:last-child').textContent='Signing in…';
+      const tokens=await exchangeCodeForToken(oauthResult.code,redirectUri,verifier);
+      driveAccessToken=tokens.access_token;
+      const expiry=Date.now()+((tokens.expires_in||3600)*1000);
+      localStorage.setItem('summit_access_token',tokens.access_token);
+      localStorage.setItem('summit_token_expiry',expiry);
+      await onSignedIn();
+    }catch(e){
+      document.getElementById('loading-screen').style.display='none';
+      document.getElementById('login-screen').style.display='flex';
+      const el=document.getElementById('login-redirect-display');
+      if(el) el.textContent=location.origin+location.pathname;
+      document.getElementById('login-status').textContent='Sign-in error: '+e.message;
+    }
     return;
   }
 
@@ -1555,6 +1627,8 @@ async function init(){
   // 3. No valid token — show login screen
   document.getElementById('loading-screen').style.display='none';
   document.getElementById('login-screen').style.display='flex';
+  const el=document.getElementById('login-redirect-display');
+  if(el) el.textContent=location.origin+location.pathname;
 }
 init();
 
