@@ -23,7 +23,8 @@
   .app{display:flex;min-height:100vh;position:relative;z-index:1}
   .sidebar{width:228px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;padding:0 0 20px}
 
-  .logo{padding:22px 18px 18px;border-bottom:1px solid var(--border);margin-bottom:10px}
+  .logo{padding:22px 18px 18px;border-bottom:1px solid var(--border);margin-bottom:10px;transition:opacity .15s;}
+  .logo:hover{opacity:.8;}
   .logo-title{font-size:1.2rem;font-weight:700;color:var(--text);letter-spacing:-0.02em}
   .logo-sub{font-size:.67rem;color:var(--text3);text-transform:uppercase;letter-spacing:.12em;margin-top:2px}
   .nav-section{padding:0 8px;margin-bottom:4px}
@@ -286,10 +287,10 @@
 <div id="login-screen">
   <div class="login-card">
     <div class="login-logo">
-      <svg width="48" height="42" viewBox="0 0 32 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <polyline points="1,26 9,10 15,19 21,5 31,26" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        <line x1="21" y1="5" x2="21" y2="1" stroke="#4ade80" stroke-width="1.5" stroke-linecap="round"/>
-        <polygon points="21,1 26,3 21,5" fill="#4ade80" opacity="0.9"/>
+      <svg width="56" height="49" viewBox="0 0 32 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <polyline points="1,26 9,10 15,19 21,5 31,26" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <line x1="21" y1="5" x2="21" y2="1" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+        <polygon points="21,1 26,3 21,5" fill="white" opacity="0.9"/>
       </svg>
     </div>
     <div class="login-title">Summit Fitness</div>
@@ -328,7 +329,7 @@
 <!-- Nav overlay (click to close sidebar on mobile) -->
 <div class="nav-overlay" id="nav-overlay" onclick="closeMobileNav()"></div>
 <div class="sidebar" id="sidebar">
-  <div class="logo">
+  <div class="logo" onclick="showPage('dashboard')" style="cursor:pointer;" title="Go to Dashboard">
     <div style="display:flex;align-items:center;gap:10px;">
       <svg width="32" height="28" viewBox="0 0 32 28" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;">
         <!-- Two mountain peaks, left smaller, right taller with flag -->
@@ -1189,15 +1190,22 @@ let lastBackupDate=null;    // YYYY-MM-DD of last auto-backup
 let saveDebounceTimer=null;
 
 // ---- Auth ----
+let justSignedOut=false; // flag so signIn uses consent prompt after logout
+
 function signIn(){
   if(typeof google==='undefined'||!google?.accounts?.oauth2){
     document.getElementById('login-status').textContent='Google sign-in is loading, please wait a moment and try again.';
     return;
   }
   document.getElementById('login-status').textContent='Opening sign-in window…';
+  // After a logout we need prompt:'consent' to force a clean flow.
+  // Otherwise 'select_account' is fine (skips re-consent if already granted).
+  const promptMode=justSignedOut?'consent':'select_account';
+  justSignedOut=false;
   const client=google.accounts.oauth2.initTokenClient({
     client_id:GAPI_CLIENT_ID,
     scope:DRIVE_SCOPE+' https://www.googleapis.com/auth/drive.file openid email profile',
+    prompt:promptMode,
     callback:async(resp)=>{
       if(resp.error){
         document.getElementById('login-status').textContent='Sign-in failed: '+resp.error;
@@ -1212,12 +1220,18 @@ function signIn(){
       document.getElementById('login-status').textContent='Sign-in error: '+(err.message||err.type||'unknown');
     }
   });
-  client.requestAccessToken({prompt:'select_account'});
+  client.requestAccessToken();
 }
 
 function signOut(){
-  if(driveAccessToken) google.accounts.oauth2.revoke(driveAccessToken);
+  // Revoke the token and tell Google's client library to clear its internal
+  // session state — without this, re-auth in the same browser tab fails.
+  if(driveAccessToken){
+    try{google.accounts.oauth2.revoke(driveAccessToken,()=>{});}catch(e){}
+  }
+  try{google.accounts.id.disableAutoSelect();}catch(e){}
   driveAccessToken=null;driveFileId=null;
+  justSignedOut=true;
   localStorage.removeItem('summit_access_token');
   localStorage.removeItem('summit_token_expiry');
   localStorage.removeItem('summit_user_email');
