@@ -1667,7 +1667,7 @@ function renderQuickAdd(){
   const sec=document.getElementById('quick-add-section'),chips=document.getElementById('quick-add-chips');
   const recent=[...state.activities].sort((a,b)=>b.date.localeCompare(a.date));
   const seen=new Set(),uniq=[];
-  for(const a of recent){const k=a.name+'|'+a.type;if(!seen.has(k)){seen.add(k);uniq.push(a);}if(uniq.length>=6)break;}
+  for(const a of recent){const k=a.name+'|'+a.type;if(!seen.has(k)){seen.add(k);uniq.push(a);}if(uniq.length>=12)break;}
   if(!uniq.length){sec.style.display='none';return;}
   sec.style.display='block';
   chips.innerHTML=uniq.map(a=>`<div class="quick-chip" onclick="quickFill('${a.id}')">${typeEmoji(a.type)} ${a.name}</div>`).join('');
