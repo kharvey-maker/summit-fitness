@@ -108,8 +108,6 @@
   .goal-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:17px;display:flex;flex-direction:column;gap:10px}
   .goal-header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
   .goal-name{font-weight:600;font-size:.9rem}
-  .goal-card-clickable{cursor:pointer;user-select:none;}
-  .goal-card-clickable:hover .goal-name{color:var(--accent2);}
 
   /* Goal history drop-down */
   .goal-detail-panel{display:none;padding:14px 0 2px;}
@@ -135,7 +133,6 @@
   .plan-day{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:7px}
   .plan-day-header{padding:10px 13px;background:var(--surface2);display:flex;align-items:center;justify-content:space-between;cursor:pointer}
   .plan-day-title{font-weight:600;font-size:.86rem}
-  .plan-day-meta{font-size:.74rem;color:var(--text2)}
   .plan-day-body{padding:11px 13px;display:none}
   .plan-day-body.open{display:block}
   .plan-workout-item{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:.845rem}
@@ -143,11 +140,6 @@
   .plan-workout-check{width:17px;height:17px;border-radius:4px;border:1.5px solid var(--border);background:var(--surface2);cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .15s;font-size:.7rem}
   .plan-workout-check.done{background:var(--accent);border-color:var(--accent);color:#0a1a10}
   .completed-tag{font-size:.67rem;background:rgba(74,222,128,.1);color:var(--accent);border:1px solid rgba(74,222,128,.2);padding:1px 7px;border-radius:99px}
-
-  .phase-badge{display:inline-flex;align-items:center;gap:5px;font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;padding:3px 9px;border-radius:99px;margin-bottom:5px}
-  .phase-1{background:rgba(96,165,250,.12);color:var(--accent2);border:1px solid rgba(96,165,250,.2)}
-  .phase-2{background:rgba(245,158,11,.12);color:var(--accent3);border:1px solid rgba(245,158,11,.2)}
-  .phase-3{background:rgba(74,222,128,.12);color:var(--accent);border:1px solid rgba(74,222,128,.2)}
 
   .tabs{display:flex;gap:3px;margin-bottom:18px;background:var(--surface2);padding:3px;border-radius:8px;width:fit-content}
   .tab{padding:5px 15px;border-radius:6px;font-size:.82rem;font-weight:500;cursor:pointer;border:none;background:none;color:var(--text2);transition:all .15s}
@@ -242,9 +234,6 @@
     .page-title{font-size:1.25rem;}
     .page-header{margin-bottom:16px;}
     .card{padding:12px;}
-
-    /* --- Plan detail buttons wrap --- */
-    .plan-detail-actions{flex-wrap:wrap;}
 
     /* --- Modals full width --- */
     .modal{
@@ -558,6 +547,18 @@
         <button class="btn btn-secondary" onclick="createManualBackup()">📁 Backup to Drive Now</button>
       </div>
       <div id="drive-sync-status" style="display:none;margin-top:9px;" class="import-status"></div>
+    </div>
+
+    <!-- Activity Types card -->
+    <div class="card mb-18">
+      <div class="card-title">🏷️ Activity Types</div>
+      <p style="font-size:.82rem;color:var(--text2);margin-bottom:14px;">Add, hide, show, or reorder activity types. Hidden types won't appear in the Log Activity dropdown. Drag to reorder.</p>
+      <div id="activity-types-list" style="margin-bottom:12px;"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
+        <input class="form-input" id="new-activity-type" placeholder="New type name…" style="flex:1;min-width:140px;" onkeydown="if(event.key==='Enter')addActivityType()" />
+        <button class="btn btn-primary btn-sm" onclick="addActivityType()">+ Add</button>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="resetActivityTypes()">↺ Reset to defaults</button>
     </div>
 
     <div class="grid2">
@@ -1439,6 +1440,7 @@ async function loadState(){
     if(saved){
       Object.assign(state,saved);
       if(!state.activityTypes||!state.activityTypes.length) state.activityTypes=[...DEFAULT_ACTIVITY_TYPES];
+      if(!state.hiddenActivityTypes) state.hiddenActivityTypes=[];
       if(!state.activePlanIds||!Array.isArray(state.activePlanIds)){
         state.activePlanIds=state.activePlanId?[state.activePlanId]:[];
       }
@@ -1495,7 +1497,7 @@ function buildSavePayload(){
   for(const[planId,os] of Object.entries(state.planOpenState||{})){
     openStateSerialized[planId]={openWeeks:[...(os.openWeeks||new Set())],openDays:[...(os.openDays||new Set())]};
   }
-  return{activities:state.activities,goals:state.goals,plans:state.plans,activePlanIds:state.activePlanIds,activityTypes:state.activityTypes,workouts:state.workouts,planOpenState:openStateSerialized};
+  return{activities:state.activities,goals:state.goals,plans:state.plans,activePlanIds:state.activePlanIds,activityTypes:state.activityTypes,hiddenActivityTypes:state.hiddenActivityTypes||[],workouts:state.workouts,planOpenState:openStateSerialized};
 }
 
 async function saveState(){
@@ -1645,10 +1647,13 @@ function openModal(id){
   }
   if(id==='modal-add-workout'){
     state.tempWoExercises=[];
+    editingExerciseIdx=null;
     ['wo-lib-name','wo-lib-desc','wo-lib-ex-name','wo-lib-ex-reps','wo-lib-ex-easier','wo-lib-ex-harder','wo-lib-ex-notes','wo-lib-import-url'].forEach(x=>{const el=document.getElementById(x);if(el)el.value='';});
     document.getElementById('wo-lib-import-status').style.display='none';
     const hiddenEl=document.getElementById('wo-lib-editing-id');if(hiddenEl)hiddenEl.value='';
     document.querySelector('#modal-add-workout .modal-title').textContent='New Workout';
+    const btn=document.querySelector('#modal-add-workout button[onclick="addWorkoutExercise()"]');
+    if(btn) btn.textContent='+ Add Exercise';
     renderWoLibExercises();
   }
   document.getElementById(id).classList.add('open');
@@ -1848,14 +1853,14 @@ function toggleGoalArchive(){
 function getGoalProg(g,wsDate,weDate){
   // If no bounds given, use current week
   if(!wsDate){const b=getWeekBounds(0);wsDate=b.ws;weDate=b.we;}
-  return Math.min(state.activities.filter(a=>{
+  return state.activities.filter(a=>{
     if(!a.completed)return false;
     const d=new Date(a.date+'T00:00:00');
     if(d<wsDate||d>=weDate)return false;
     if(g.type!=='Any'&&a.type!==g.type)return false;
     if(g.keyword&&!a.name.toLowerCase().includes(g.keyword.toLowerCase()))return false;
     return true;
-  }).length, g.count);
+  }).length; // no cap — show actual count even if over goal
 }
 
 // Count matching completed activities on a single date string
@@ -1895,7 +1900,7 @@ function renderGoals(){
 function goalCardHtml(g,isArchived){
   const done=getGoalProg(g);
   const pct=Math.round(done/g.count*100);
-  const col=pct>=100?'var(--accent)':pct>=50?'var(--accent3)':'var(--accent2)';
+  const col=done>=g.count?'var(--accent)':pct>=50?'var(--accent3)':'var(--accent2)';
   return`<div class="goal-card" id="gcard-${g.id}" style="opacity:${isArchived?.7:1};">
     <div class="goal-header">
       <div style="flex:1;min-width:0;cursor:pointer;" onclick="toggleGoalDetail('${g.id}')" title="Click to see history">
@@ -1915,9 +1920,9 @@ function goalCardHtml(g,isArchived){
     ${!isArchived?`<div>
       <div class="flex-between" style="margin-bottom:5px;">
         <div style="font-size:.79rem;color:var(--text2);"><span style="color:${col};font-weight:700;font-size:1rem;">${done}</span> / ${g.count} sessions this week</div>
-        <div style="font-size:.79rem;color:${col};font-weight:600;">${pct>=100?'🎉 Done!':pct+'%'}</div>
+        <div style="font-size:.79rem;color:${col};font-weight:600;">${done>=g.count?'🎉 Done!':Math.round(done/g.count*100)+'%'}</div>
       </div>
-      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${col};"></div></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${Math.min(pct,100)}%;background:${col};"></div></div>
     </div>`:''}
     <div class="goal-detail-panel" id="gdp-${g.id}"></div>
   </div>`;
@@ -2124,23 +2129,48 @@ function renderWoLibExercises(){
       <span style="font-weight:600;flex:1;">${ex.name}</span>
       ${ex.reps?`<span style="color:var(--accent3);font-size:.76rem;">${ex.reps}</span>`:''}
       ${ex.easier||ex.harder?`<span style="font-size:.68rem;color:var(--text3);">has mods</span>`:''}
-      <button onclick="removeWoExercise(${i})" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:.88rem;padding:0 2px;">✕</button>
+      <button onclick="editWoExercise(${i})" style="background:none;border:none;color:var(--accent2);cursor:pointer;font-size:.82rem;padding:0 3px;" title="Edit">✏️</button>
+      <button onclick="removeWoExercise(${i})" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:.88rem;padding:0 2px;" title="Remove">✕</button>
     </div>`).join('')}
   </div>`;
+}
+
+let editingExerciseIdx=null; // track which exercise is being edited
+
+function editWoExercise(i){
+  const ex=state.tempWoExercises[i];if(!ex)return;
+  editingExerciseIdx=i;
+  document.getElementById('wo-lib-ex-name').value=ex.name||'';
+  document.getElementById('wo-lib-ex-reps').value=ex.reps||'';
+  document.getElementById('wo-lib-ex-easier').value=ex.easier||'';
+  document.getElementById('wo-lib-ex-harder').value=ex.harder||'';
+  document.getElementById('wo-lib-ex-notes').value=ex.notes||'';
+  // Change button label to indicate update mode
+  const btn=document.querySelector('#modal-add-workout button[onclick="addWorkoutExercise()"]');
+  if(btn) btn.textContent='✓ Update Exercise';
+  document.getElementById('wo-lib-ex-name').focus();
 }
 
 function addWorkoutExercise(){
   const name=document.getElementById('wo-lib-ex-name').value.trim();
   if(!name){document.getElementById('wo-lib-ex-name').focus();return;}
   if(!state.tempWoExercises) state.tempWoExercises=[];
-  state.tempWoExercises.push({
-    id:uid(),
+  const exData={
+    id:editingExerciseIdx!==null?(state.tempWoExercises[editingExerciseIdx]?.id||uid()):uid(),
     name,
     reps:document.getElementById('wo-lib-ex-reps').value.trim(),
     easier:document.getElementById('wo-lib-ex-easier').value.trim(),
     harder:document.getElementById('wo-lib-ex-harder').value.trim(),
     notes:document.getElementById('wo-lib-ex-notes').value.trim(),
-  });
+  };
+  if(editingExerciseIdx!==null){
+    state.tempWoExercises[editingExerciseIdx]=exData;
+    editingExerciseIdx=null;
+    const btn=document.querySelector('#modal-add-workout button[onclick="addWorkoutExercise()"]');
+    if(btn) btn.textContent='+ Add Exercise';
+  } else {
+    state.tempWoExercises.push(exData);
+  }
   ['wo-lib-ex-name','wo-lib-ex-reps','wo-lib-ex-easier','wo-lib-ex-harder','wo-lib-ex-notes'].forEach(id=>{document.getElementById(id).value='';});
   document.getElementById('wo-lib-ex-name').focus();
   renderWoLibExercises();
@@ -2168,16 +2198,22 @@ function saveWorkoutToLibrary(){
 
 function openEditWorkout(id){
   const wo=state.workouts.find(w=>w.id===id);if(!wo)return;
+  // Populate fields first
   state.tempWoExercises=wo.exercises.map(e=>({...e}));
   document.getElementById('wo-lib-name').value=wo.name;
   document.getElementById('wo-lib-desc').value=wo.desc||'';
+  // Clear the add-exercise input fields
+  ['wo-lib-ex-name','wo-lib-ex-reps','wo-lib-ex-easier','wo-lib-ex-harder','wo-lib-ex-notes'].forEach(x=>{const el=document.getElementById(x);if(el)el.value='';});
+  document.getElementById('wo-lib-import-url').value='';
+  document.getElementById('wo-lib-import-status').style.display='none';
   // Set or create hidden editing-id field
   let hiddenEl=document.getElementById('wo-lib-editing-id');
   if(!hiddenEl){hiddenEl=document.createElement('input');hiddenEl.type='hidden';hiddenEl.id='wo-lib-editing-id';document.getElementById('modal-add-workout').querySelector('.modal').appendChild(hiddenEl);}
   hiddenEl.value=id;
   renderWoLibExercises();
   document.querySelector('#modal-add-workout .modal-title').textContent='Edit Workout';
-  openModal('modal-add-workout');
+  // Open modal directly (bypass the reset block in openModal)
+  document.getElementById('modal-add-workout').classList.add('open');
 }
 
 async function importWorkoutFromUrl(){
@@ -2213,9 +2249,6 @@ If you cannot access the URL, infer from the URL text. Keep exercise names conci
     st.className='import-status error';st.textContent=`❌ ${err.message||'Could not extract workout. Try adding exercises manually.'}`;
   }
 }
-
-// Reset modal state when opening fresh
-const _origOpenModal=typeof openModal==='function'?openModal:null;
 
 // ===================== PLANS =====================
 function savePlan(){
@@ -2965,6 +2998,7 @@ function renderDataPage(){
     sel.value=saved;
   }
   updateBackupNextLabel();
+  renderSettingsPage();
 }
 function buildExportJson(){
   return JSON.stringify({version:5,exportedAt:new Date().toISOString(),activities:state.activities,goals:state.goals,plans:state.plans,activePlanIds:state.activePlanIds,activityTypes:state.activityTypes,workouts:state.workouts},null,2);
@@ -2993,7 +3027,9 @@ function importData(){
 
 // ===================== ACTIVITY TYPE SELECTS =====================
 function populateTypeSelects(selectedValue){
-  const types=state.activityTypes||DEFAULT_ACTIVITY_TYPES;
+  const allTypes=state.activityTypes||DEFAULT_ACTIVITY_TYPES;
+  const hidden=state.hiddenActivityTypes||[];
+  const types=allTypes.filter(t=>!hidden.includes(t));
   // Log activity select
   const actSel=document.getElementById('act-type');
   if(actSel){
@@ -3004,7 +3040,8 @@ function populateTypeSelects(selectedValue){
   const editSel=document.getElementById('edit-act-type');
   if(editSel){
     const cur=editSel.value||types[0];
-    editSel.innerHTML=types.map(t=>`<option${t===cur?' selected':''}>${t}</option>`).join('');
+    // Include all types for edit (activity may have been logged with a now-hidden type)
+    editSel.innerHTML=allTypes.map(t=>`<option${t===cur?' selected':''}>${t}</option>`).join('');
   }
   // Goal type select
   const goalSel=document.getElementById('goal-type');
@@ -3017,18 +3054,23 @@ function populateTypeSelects(selectedValue){
 
 // ===================== SETTINGS =====================
 function renderSettingsPage(){
+  // Render into the Data page activity types list
   const list=document.getElementById('activity-types-list');
+  if(!list)return;
   const types=state.activityTypes||DEFAULT_ACTIVITY_TYPES;
-  list.innerHTML=types.map((t,i)=>`
-    <div draggable="true"
+  const hidden=state.hiddenActivityTypes||[];
+  list.innerHTML=types.map((t,i)=>{
+    const isHidden=hidden.includes(t);
+    return`<div draggable="true"
       ondragstart="dragStart(event,${i})" ondragover="dragOver(event)" ondrop="dropType(event,${i})" ondragend="dragEnd(event)"
-      style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:grab;transition:opacity .15s;"
+      style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:grab;transition:opacity .15s;opacity:${isHidden?.5:1};"
       id="type-row-${i}">
       <span style="color:var(--text3);font-size:.8rem;cursor:grab;user-select:none;">⠿</span>
-      <span style="flex:1;font-size:.88rem;">${t}</span>
-      <span style="font-size:.8rem;margin-right:4px;">${typeEmoji(t)}</span>
-      <button class="btn btn-danger btn-sm btn-icon" onclick="removeActivityType(${i})" title="Remove">✕</button>
-    </div>`).join('');
+      <span style="flex:1;font-size:.88rem;${isHidden?'text-decoration:line-through;color:var(--text3);':''}">${typeEmoji(t)} ${t}</span>
+      <button class="btn btn-secondary btn-sm" onclick="toggleHideActivityType(${i})" title="${isHidden?'Show':'Hide'}" style="font-size:.72rem;padding:2px 8px;">${isHidden?'Show':'Hide'}</button>
+      <button class="btn btn-danger btn-sm btn-icon" onclick="removeActivityType(${i})" title="Delete permanently">✕</button>
+    </div>`;
+  }).join('');
 }
 
 let dragSrcIdx=null;
@@ -3043,6 +3085,17 @@ function dropType(e,targetIdx){
   types.splice(targetIdx,0,moved);
   state.activityTypes=types;
   dragSrcIdx=null;
+  saveState();
+  renderSettingsPage();
+  populateTypeSelects();
+}
+
+function toggleHideActivityType(i){
+  if(!state.hiddenActivityTypes) state.hiddenActivityTypes=[];
+  const t=state.activityTypes[i];
+  const idx=state.hiddenActivityTypes.indexOf(t);
+  if(idx>=0) state.hiddenActivityTypes.splice(idx,1);
+  else state.hiddenActivityTypes.push(t);
   saveState();
   renderSettingsPage();
   populateTypeSelects();
